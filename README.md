@@ -254,6 +254,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
+- **GPBinaryV16 Protocol**: Majority of the binary protocol implementation was ported from [eelstork/Photon-PUN-Base](https://github.com/eelstork/Photon-PUN-Base)
 - Based on the Photon Unity Networking protocol specification
 - Inspired by the original Photon Server implementation
 - Built with Node.js native networking capabilities
