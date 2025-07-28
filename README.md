@@ -1,260 +1,189 @@
 # Photon Server Node.js
 
-A complete GPBinaryV16 Photon Server implementation in Node.js that provides real-time multiplayer networking capabilities.
+A GPBinaryV16 Photon Server implementation in Node.js for real-time multiplayer games.
 
-## Features
+## What is this?
 
-- ✅ **Full GPBinaryV16 Protocol Support** - Complete implementation of Photon's binary protocol
-- ✅ **Room Management** - Create, join, leave rooms with custom properties
-- ✅ **Real-time Events** - Broadcast events to players in rooms
-- ✅ **Authentication** - Player authentication and session management
-- ✅ **Master Client** - Automatic master client selection and switching
-- ✅ **Connection Management** - Ping/pong, timeouts, and graceful disconnects
-- ✅ **Statistics** - Built-in performance monitoring and statistics
-- ✅ **Modular Architecture** - Clean separation of concerns with proper module exports
+This is a custom implementation of a Photon server that lets you host your own multiplayer game servers instead of relying on Photon Cloud. It handles the networking protocol that Unity's Photon PUN uses, so your games can connect to your own servers.
 
-## Quick Start
+## Why use this?
 
-### Installation
+- Host your own game servers without monthly fees
+- Full control over your multiplayer infrastructure  
+- No player limits or bandwidth restrictions
+- Keep your game data on your own servers
+- Works with existing PUN client code (mostly)
+
+## Getting it running
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/photon-server-nodejs.git
+git clone https://github.com/cyberarchives/photon-server-nodejs
 cd photon-server-nodejs
-
-# Install dependencies
 npm install
-
-# Start the server
-npm start
+node examples/basic-server.js
 ```
 
-### Basic Usage
+Your server will start on port 5055. Point your Unity game clients to `your-server-ip:5055`.
+
+## Basic setup
 
 ```javascript
 const { PhotonServer } = require('./src');
 
-// Create and start server
-const server = new PhotonServer({ port: 5055 });
+const server = new PhotonServer({ 
+    port: 5055,
+    maxConnections: 500
+});
 
 server.on('peerConnected', (peer) => {
-    console.log(`Player connected: ${peer.peerId}`);
+    console.log(`Player ${peer.peerId} connected`);
 });
 
-server.on('roomCreated', (room) => {
-    console.log(`Room created: ${room.name}`);
-});
-
-await server.start();
-console.log('Photon Server running on port 5055');
+server.start();
 ```
 
-## Architecture
+## How it works
+
+The server handles these main things:
+
+**Rooms** - Players join rooms to play together. Rooms can have custom properties, player limits, passwords, etc.
+
+**Events** - Players send events (like "I moved", "I shot") which get broadcast to other players in the room.
+
+**Operations** - Protocol-level stuff like joining rooms, authentication, getting room lists.
+
+**Master Client** - One player in each room is the "master" and can control room settings.
+
+## Project structure
 
 ```
 src/
-├── protocol/          # Protocol implementation
-│   ├── PhotonParser.js      # Binary protocol parser
-│   ├── PhotonSerializer.js  # Binary protocol serializer
-│   └── constants.js         # Protocol constants
-├── core/              # Core server components
-│   ├── PhotonServer.js      # Main server class
-│   ├── PhotonPeer.js        # Client connection handler
-│   └── PhotonRoom.js        # Room management
-├── handlers/          # Operation handlers
-│   └── OperationHandler.js  # Handles all client operations
-└── index.js          # Main exports
+├── protocol/           # Binary protocol parsing/serialization
+├── core/              # Server, rooms, and peer management
+├── handlers/          # Handles different operation types
+└── utils/             # Logging and utilities
 ```
 
-## API Reference
+## Supported features
 
-### PhotonServer
+Most of the standard Photon operations work:
+
+- Join/leave rooms
+- Create rooms with settings
+- Player authentication  
+- Custom room/player properties
+- Event broadcasting
+- Master client switching
+- Room lists and lobbies
+
+## Protocol support
+
+The binary protocol implementation handles all the data types Unity PUN sends:
+
+- Basic types (int, float, string, bool, etc.)
+- Arrays and dictionaries
+- Unity types (Vector3, Quaternion)
+- Custom serializable objects
+
+Most PUN features should work out of the box.
+
+## Configuration options
 
 ```javascript
-const server = new PhotonServer({
-    port: 5055,                    // Server port
-    host: '0.0.0.0',              // Server host
-    maxConnections: 1000,          // Maximum concurrent connections
-    pingInterval: 30000,           // Ping interval in milliseconds
-    connectionTimeout: 60000       // Connection timeout in milliseconds
-});
+new PhotonServer({
+    port: 5055,                // What port to listen on
+    host: '0.0.0.0',          // What interface to bind to
+    maxConnections: 1000,      // Connection limit
+    pingInterval: 30000,       // How often to ping clients
+    connectionTimeout: 60000   // When to drop inactive clients
+})
 ```
 
-**Methods:**
-- `start()` - Start the server
-- `stop()` - Stop the server gracefully
-- `createRoom(name, options)` - Create a new room
-- `getRoom(name)` - Get room by name
-- `getPeer(peerId)` - Get peer by ID
-- `getStats()` - Get server statistics
-
-**Events:**
-- `started` - Server started
-- `stopped` - Server stopped
-- `peerConnected(peer)` - New peer connected
-- `peerDisconnected(peer)` - Peer disconnected
-- `roomCreated(room)` - Room created
-- `roomRemoved(room)` - Room removed
-- `error(error)` - Server error
-
-### PhotonRoom
+## Room management
 
 ```javascript
-const room = new PhotonRoom('MyRoom', {
-    maxPlayers: 4,                 // Maximum players
-    isOpen: true,                  // Room open for joining
-    isVisible: true,               // Room visible in lobby
-    customProperties: {},          // Custom room properties
-    password: null                 // Room password (optional)
-});
-```
-
-**Methods:**
-- `addPeer(peer)` - Add peer to room
-- `removePeer(peer)` - Remove peer from room
-- `broadcastEvent(eventCode, data, excludePeer)` - Broadcast event to all peers
-- `setCustomProperties(properties)` - Set room properties
-- `getPlayerList()` - Get list of players in room
-
-### PhotonPeer
-
-**Methods:**
-- `sendOperationResponse(opCode, returnCode, parameters)` - Send operation response
-- `sendEvent(eventCode, parameters)` - Send event to peer
-- `authenticate(nickname, userId)` - Authenticate peer
-- `setCustomProperties(properties)` - Set player properties
-- `disconnect(reason)` - Disconnect peer
-
-## Supported Operations
-
-- **230** - Authentication
-- **226** - Join Room
-- **227** - Leave Room / Create Room
-- **225** - Join Random Room
-- **248** - Change Properties
-- **253** - Get Rooms
-- **255** - Raise Event
-- **220** - Get Room List
-
-## Protocol Support
-
-### Data Types
-- ✅ Null (0x2A)
-- ✅ Boolean (0x6F)
-- ✅ Byte (0x62)
-- ✅ Short (0x6B)
-- ✅ Integer (0x69)
-- ✅ Long (0x6C)
-- ✅ Float (0x66)
-- ✅ Double (0x64)
-- ✅ String (0x73)
-- ✅ ByteArray (0x78)
-- ✅ Array (0x79)
-- ✅ ObjectArray (0x7A)
-- ✅ StringArray (0x61)
-- ✅ IntArray (0x6E)
-- ✅ Dictionary (0x44)
-- ✅ HashTable (0x68)
-- ✅ CustomData (0x63)
-  - ✅ Vec2 ('W')
-  - ✅ Vec3 ('V')
-  - ✅ Quaternion ('Q')
-  - ✅ PhotonPlayer ('P')
-
-### Commands
-- ✅ Ping (5)
-- ✅ Send Reliable (6)
-- ✅ Send Unreliable (7)
-- ✅ Verify Connect (3)
-- ✅ Disconnect (4)
-
-## Examples
-
-### Creating a Custom Game Server
-
-```javascript
-const { PhotonServer } = require('./src');
-
-const server = new PhotonServer({ port: 5055 });
-
-// Handle custom game events
-server.on('peerConnected', (peer) => {
-    // Send welcome message
-    peer.sendEvent(200, { message: 'Welcome to the game!' });
-});
-
-// Custom room with game-specific properties
-server.createRoom('GameRoom1', {
+// Create a room
+const room = server.createRoom('MyRoom', {
     maxPlayers: 8,
+    isVisible: true,
     customProperties: {
         gameMode: 'deathmatch',
-        mapName: 'arena_01',
-        maxScore: 100
+        map: 'dust2'
     }
 });
 
-await server.start();
+// Rooms clean themselves up when empty
+// You can also manually remove them
+server.removeRoom('MyRoom');
 ```
 
-### Advanced Room Management
+## Events and messaging
 
 ```javascript
-// Create room with password
-const room = server.createRoom('PrivateRoom', {
-    password: 'secret123',
-    maxPlayers: 2,
-    customProperties: {
-        gameType: 'private_match'
-    }
+// In your game logic
+peer.sendEvent(100, { 
+    action: 'playerMove',
+    position: { x: 10, y: 0, z: 5 }
 });
 
-// Handle room events
-room.on('playerJoined', (peer) => {
-    console.log(`${peer.playerName} joined ${room.name}`);
-    
-    // Send room state to new player
-    peer.sendEvent(100, {
-        players: room.getPlayerList(),
-        gameState: room.gameState
-    });
-});
+// This gets broadcast to all other players in the room
+// Your Unity client code receives it like a normal PUN event
 ```
 
-## Performance
+## Running in production
 
-- **Memory Usage**: ~50MB base + ~1KB per connection
-- **Throughput**: 10,000+ messages/second on modern hardware
-- **Connections**: Supports 1000+ concurrent connections
-- **Latency**: Sub-millisecond processing overhead
+For production use:
 
-## Development
+- Run behind a reverse proxy (nginx)
+- Set up proper logging
+- Monitor memory usage and connections
+- Use PM2 or similar for process management
+- Set NODE_ENV=production
 
-```bash
-# Install development dependencies
-npm install --dev
+The server includes built-in metrics and health monitoring.
 
-# Run with auto-restart
-npm run dev
+## Performance notes
 
-# Run basic server example
-npm start
+- Handles 1000+ concurrent connections on decent hardware
+- Memory usage is roughly 1KB per connected player
+- Event processing is very fast (sub-millisecond)
+- File logging is async and won't block gameplay
+
+## Limitations
+
+This isn't a 1:1 Photon replacement. Some differences:
+
+- No built-in matchmaking algorithms
+- No Photon Cloud integration obviously
+- Some advanced PUN features might not work
+- You'll need to handle server scaling yourself
+
+## Common issues
+
+**"Cannot find module" errors** - Make sure you ran `npm install` and have a package.json file.
+
+**Clients can't connect** - Check firewall settings and make sure the port is open.
+
+**High memory usage** - Monitor your room cleanup settings and connection limits.
+
+## Client connection (Unity)
+
+In your Unity game, change the Photon settings to connect to your server:
+
+```csharp
+PhotonNetwork.PhotonServerSettings.HostType = ServerHostType.SelfHosted;
+PhotonNetwork.PhotonServerSettings.ServerAddress = "your-server-ip";
+PhotonNetwork.PhotonServerSettings.ServerPort = 5055;
 ```
 
 ## Contributing
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Feel free to submit issues and pull requests. The codebase is pretty straightforward to work with.
+
+## Credits
+
+The binary protocol implementation is based on work from the [Photon-PUN-Base](https://github.com/eelstork/Photon-PUN-Base) project. Thanks to eelstork for figuring out the protocol details.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- **GPBinaryV16 Protocol**: Majority of the binary protocol implementation was ported from [eelstork/Photon-PUN-Base](https://github.com/eelstork/Photon-PUN-Base)
-- Based on the Photon Unity Networking protocol specification
-- Inspired by the original Photon Server implementation
-- Built with Node.js native networking capabilities
+MIT License - use it however you want.
