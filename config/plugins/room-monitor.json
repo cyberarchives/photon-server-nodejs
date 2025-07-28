@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "logRoomEvents": true,
+  "trackPlayerTime": true,
+  "alertOnLargeRooms": true,
+  "largeRoomThreshold": 6
+}

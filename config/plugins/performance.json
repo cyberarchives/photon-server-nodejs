@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "sampleInterval": 30000,
+  "alertThresholds": {
+    "memoryUsage": 75,
+    "eventLatency": 50,
+    "connectionCount": 85
+  },
+  "keepSamples": 200
+}

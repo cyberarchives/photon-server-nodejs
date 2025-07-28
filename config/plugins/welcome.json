@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "welcomeMessage": "🎮 Welcome to our awesome game server!",
+  "showPlayerCount": true,
+  "logConnections": true
+}

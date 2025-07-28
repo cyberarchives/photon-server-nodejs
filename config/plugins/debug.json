@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "logAllEvents": false,
+  "logOperations": false,
+  "logRoomEvents": true
+}

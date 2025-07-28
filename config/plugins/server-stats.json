@@ -1,0 +1,5 @@
+{
+  "enabled": true,
+  "reportInterval": 30000,
+  "logDetailedStats": true
+}

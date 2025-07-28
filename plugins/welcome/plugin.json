@@ -1,0 +1,23 @@
+{
+  "name": "welcome",
+  "version": "1.0.0",
+  "description": "Welcomes new players and tracks connections",
+  "author": "Photon Server",
+  "main": "index.js",
+  "photonVersion": "1.0.0",
+  "dependencies": [],
+  "permissions": [
+    "peer:monitor",
+    "event:send"
+  ],
+  "hooks": [
+    "peer:connected",
+    "peer:disconnected"
+  ],
+  "config": {
+    "enabled": true,
+    "welcomeMessage": "Welcome to the Photon Server!",
+    "showPlayerCount": true,
+    "logConnections": true
+  }
+}

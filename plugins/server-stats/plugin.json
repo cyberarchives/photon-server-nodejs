@@ -1,0 +1,24 @@
+{
+  "name": "server-stats",
+  "version": "1.0.0",
+  "description": "Tracks and reports server statistics",
+  "author": "Photon Server",
+  "main": "index.js",
+  "photonVersion": "1.0.0",
+  "dependencies": [],
+  "permissions": [
+    "stats:collect",
+    "system:monitor"
+  ],
+  "hooks": [
+    "peer:connected",
+    "peer:disconnected",
+    "room:created",
+    "room:destroyed"
+  ],
+  "config": {
+    "enabled": true,
+    "reportInterval": 60000,
+    "logDetailedStats": true
+  }
+}

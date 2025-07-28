@@ -1,16 +1,18 @@
 const { PhotonServer } = require('../src');
+const PluginManager = require('../src/plugins/PluginManager');
 const logger = require('../src/utils/logger');
 const path = require('path');
 const fs = require('fs');
 
 /**
- * Professional Photon Server Startup Script
+ * Professional Photon Server Startup Script with Plugin System
  * Enterprise-grade server initialization with comprehensive
- * monitoring, error handling, and graceful shutdown
+ * monitoring, error handling, graceful shutdown, and plugin management
  */
 class ServerManager {
     constructor() {
         this.server = null;
+        this.pluginManager = null;
         this.statsInterval = null;
         this.healthCheckInterval = null;
         this.shutdownInProgress = false;
@@ -23,7 +25,11 @@ class ServerManager {
         this._setupProcessHandlers();
         
         logger.info('ServerManager initialized', { 
-            config: this.config,
+            port: this.config.port,
+            host: this.config.host,
+            maxConnections: this.config.maxConnections,
+            logLevel: this.config.logLevel,
+            pluginsEnabled: this.config.enablePlugins,
             nodeVersion: process.version,
             platform: process.platform
         });
@@ -50,7 +56,17 @@ class ServerManager {
             logLevel: 'info',
             enableClustering: false,
             maxMemoryUsage: 1024 * 1024 * 1024, // 1GB
-            gracefulShutdownTimeout: 10000
+            gracefulShutdownTimeout: 10000,
+            
+            // Plugin configuration
+            enablePlugins: true,
+            pluginsDir: './plugins',
+            pluginConfigDir: './config/plugins',
+            enabledPlugins: [], // Empty array = load all discovered plugins
+            disabledPlugins: [],
+            enablePluginSandboxing: true,
+            enablePluginHotReload: process.env.NODE_ENV === 'development',
+            pluginExecutionTimeout: 5000
         };
 
         // Override with environment variables
@@ -62,7 +78,10 @@ class ServerManager {
             connectionTimeout: process.env.PHOTON_CONNECTION_TIMEOUT ? parseInt(process.env.PHOTON_CONNECTION_TIMEOUT) : defaultConfig.connectionTimeout,
             logLevel: process.env.LOG_LEVEL || defaultConfig.logLevel,
             enableMetrics: process.env.ENABLE_METRICS !== 'false',
-            enableHealthCheck: process.env.ENABLE_HEALTH_CHECK !== 'false'
+            enableHealthCheck: process.env.ENABLE_HEALTH_CHECK !== 'false',
+            enablePlugins: process.env.ENABLE_PLUGINS !== 'false',
+            pluginsDir: process.env.PLUGINS_DIR || defaultConfig.pluginsDir,
+            enablePluginSandboxing: process.env.ENABLE_PLUGIN_SANDBOXING !== 'false'
         };
 
         // Try to load config file
@@ -101,15 +120,18 @@ class ServerManager {
     }
 
     /**
-     * Start the Photon server
+     * Start the Photon server with plugins
      * @returns {Promise<void>}
      */
     async start() {
         try {
             logger.info('Starting Photon Server...', { 
-                config: this.config,
+                port: this.config.port,
+                host: this.config.host,
+                maxConnections: this.config.maxConnections,
+                pluginsEnabled: this.config.enablePlugins,
                 pid: process.pid,
-                memory: process.memoryUsage()
+                memory: this._formatMemoryUsage(process.memoryUsage())
             });
 
             // Create server instance
@@ -117,6 +139,11 @@ class ServerManager {
             
             // Setup server event listeners
             this._setupServerEvents();
+            
+            // Initialize plugin system before starting server
+            if (this.config.enablePlugins) {
+                await this._initializePluginSystem();
+            }
             
             // Start the server
             await this.server.start();
@@ -134,6 +161,109 @@ class ServerManager {
             });
             throw error;
         }
+    }
+
+    /**
+     * Initialize the plugin system
+     * @private
+     * @returns {Promise<void>}
+     */
+    async _initializePluginSystem() {
+        try {
+            logger.info('Initializing plugin system...');
+            
+            // Create plugin manager
+            this.pluginManager = new PluginManager(this.server, {
+                pluginsDir: this.config.pluginsDir,
+                configDir: this.config.pluginConfigDir,
+                enabledPlugins: this.config.enabledPlugins,
+                disabledPlugins: this.config.disabledPlugins,
+                enableSandboxing: this.config.enablePluginSandboxing,
+                enableHotReload: this.config.enablePluginHotReload,
+                maxExecutionTime: this.config.pluginExecutionTimeout,
+                autoLoad: true,
+                validatePlugins: true
+            });
+            
+            // Setup plugin event handlers
+            this._setupPluginEvents();
+            
+            // Initialize plugin manager
+            await this.pluginManager.initialize();
+            
+            const pluginStats = this.pluginManager.getStats();
+            logger.info('Plugin system initialized', {
+                totalPlugins: pluginStats.totalPlugins,
+                activePlugins: pluginStats.activePlugins,
+                errorPlugins: pluginStats.errorPlugins,
+                totalHooks: pluginStats.totalHooks
+            });
+            
+        } catch (error) {
+            logger.error('Failed to initialize plugin system', { error: error.message });
+            
+            // Decide whether to continue without plugins or fail
+            if (this.config.requirePlugins) {
+                throw error;
+            } else {
+                logger.warn('Continuing without plugin system');
+                this.pluginManager = null;
+            }
+        }
+    }
+
+    /**
+     * Setup plugin event handlers
+     * @private
+     */
+    _setupPluginEvents() {
+        // Plugin lifecycle events
+        this.pluginManager.on('pluginLoaded', (pluginInfo) => {
+            logger.info('Plugin loaded', {
+                name: pluginInfo.name,
+                version: pluginInfo.manifest.version,
+                author: pluginInfo.manifest.author,
+                description: pluginInfo.manifest.description
+            });
+        });
+
+        this.pluginManager.on('pluginUnloaded', (pluginInfo) => {
+            logger.info('Plugin unloaded', {
+                name: pluginInfo.name
+            });
+        });
+
+        this.pluginManager.on('initialized', () => {
+            logger.info('Plugin system fully initialized');
+        });
+
+        // Plugin-specific events (examples)
+        this.pluginManager.on('antiCheatViolation', (data) => {
+            logger.warn('Anti-cheat violation detected', {
+                peerId: data.peer.peerId,
+                playerName: data.peer.playerName,
+                violationType: data.violationType,
+                details: data.details,
+                totalViolations: data.totalViolations
+            });
+        });
+
+        this.pluginManager.on('playerBanned', (data) => {
+            logger.error('Player banned by plugin', {
+                peerId: data.peer.peerId,
+                playerName: data.peer.playerName,
+                reason: data.reason
+            });
+        });
+
+        this.pluginManager.on('chatViolation', (data) => {
+            logger.warn('Chat violation detected', {
+                peerId: data.peer.peerId,
+                playerName: data.peer.playerName,
+                violationType: data.violationType,
+                warnings: data.warnings
+            });
+        });
     }
 
     /**
@@ -224,19 +354,34 @@ class ServerManager {
                 const stats = this.server.getStats();
                 const health = this.server.getHealthStatus();
                 
-                logger.info('Server Metrics', {
+                // Get plugin stats if available
+                const pluginStats = this.pluginManager ? this.pluginManager.getStats() : null;
+                
+                logger.info('📈 Server Metrics', {
                     connections: stats.currentConnections,
                     rooms: stats.currentRooms,
                     totalMessages: stats.totalMessages,
                     uptime: Math.floor(stats.uptime / 1000),
                     memory: this._formatMemoryUsage(stats.memory),
-                    health: health.status
+                    health: health.status,
+                    ...(pluginStats && {
+                        plugins: {
+                            active: pluginStats.activePlugins,
+                            total: pluginStats.totalPlugins,
+                            hooks: pluginStats.totalHooks,
+                            errors: pluginStats.errorPlugins
+                        }
+                    })
                 });
 
                 // Log detailed performance metrics if enabled
                 if (logger.isDebugEnabled()) {
                     const metrics = this.server.getMetrics();
                     logger.debug('Detailed metrics', metrics);
+                    
+                    if (pluginStats) {
+                        logger.debug('Plugin metrics', { plugins: pluginStats.plugins });
+                    }
                 }
 
             } catch (error) {
@@ -266,7 +411,7 @@ class ServerManager {
                     .filter(({ health }) => health.status !== 'healthy');
 
                 if (unhealthyRooms.length > 0) {
-                    logger.warn('Unhealthy rooms detected', {
+                    logger.warn('🔶 Unhealthy rooms detected', {
                         count: unhealthyRooms.length,
                         rooms: unhealthyRooms.map(({ room, health }) => ({
                             name: room.name,
@@ -274,6 +419,17 @@ class ServerManager {
                             issues: health.issues
                         }))
                     });
+                }
+
+                // Check plugin health if available
+                if (this.pluginManager) {
+                    const pluginStats = this.pluginManager.getStats();
+                    if (pluginStats.errorPlugins > 0) {
+                        logger.warn('Plugin errors detected', {
+                            errorPlugins: pluginStats.errorPlugins,
+                            totalPlugins: pluginStats.totalPlugins
+                        });
+                    }
                 }
 
             } catch (error) {
@@ -291,7 +447,7 @@ class ServerManager {
             const memUsage = process.memoryUsage();
             
             if (memUsage.heapUsed > this.config.maxMemoryUsage * 0.9) {
-                logger.warn('🔶 High memory usage detected', {
+                logger.warn('High memory usage detected', {
                     current: this._formatBytes(memUsage.heapUsed),
                     limit: this._formatBytes(this.config.maxMemoryUsage),
                     percentage: Math.round((memUsage.heapUsed / this.config.maxMemoryUsage) * 100)
@@ -313,6 +469,7 @@ class ServerManager {
     _logStartupSuccess() {
         const serverInfo = this.server.getServerInfo();
         const startupTime = Date.now() - this.startTime;
+        const pluginStats = this.pluginManager ? this.pluginManager.getStats() : null;
         
         logger.info('Photon Server startup completed', {
             startupTime: `${startupTime}ms`,
@@ -323,20 +480,33 @@ class ServerManager {
             features: {
                 metrics: this.config.enableMetrics,
                 healthCheck: this.config.enableHealthCheck,
-                clustering: this.config.enableClustering
-            }
+                clustering: this.config.enableClustering,
+                plugins: this.config.enablePlugins
+            },
+            ...(pluginStats && {
+                plugins: {
+                    loaded: pluginStats.totalPlugins,
+                    active: pluginStats.activePlugins,
+                    hooks: pluginStats.totalHooks
+                }
+            })
         });
 
         // Display startup banner
-        this._displayStartupBanner(serverInfo);
+        this._displayStartupBanner(serverInfo, pluginStats);
     }
 
     /**
      * Display startup banner
      * @private
      * @param {Object} serverInfo - Server information
+     * @param {Object} pluginStats - Plugin statistics
      */
-    _displayStartupBanner(serverInfo) {
+    _displayStartupBanner(serverInfo, pluginStats) {
+        const pluginInfo = pluginStats ? 
+            `${pluginStats.activePlugins}/${pluginStats.totalPlugins} active` : 
+            'Disabled';
+            
         const banner = `
 ╔══════════════════════════════════════════════════════════════╗
 ║                    PHOTON SERVER STARTED                     ║
@@ -346,11 +516,23 @@ class ServerManager {
 ║ Max Connections: ${this.config.maxConnections.toString().padEnd(37)}       ║
 ║ Monitoring: ${(this.config.enableMetrics ? 'Enabled' : 'Disabled').padEnd(41)}        ║
 ║ Health Checks: ${(this.config.enableHealthCheck ? 'Enabled' : 'Disabled').padEnd(38)}        ║
+║ Plugins: ${pluginInfo.padEnd(44)}        ║
 ║ Log Level: ${this.config.logLevel.padEnd(42)}        ║
 ╚══════════════════════════════════════════════════════════════╝
         `;
         
         console.log(banner);
+        
+        // Display loaded plugins
+        if (pluginStats && pluginStats.totalPlugins > 0) {
+            console.log('\n🔌 Loaded Plugins:');
+            for (const [name, plugin] of Object.entries(pluginStats.plugins)) {
+                const status = plugin.state === 'active' ? '[+]' : 
+                             plugin.state === 'error' ? '❌' : '[-]';
+                console.log(`   ${status} ${name} (v${plugin.version})`);
+            }
+            console.log('');
+        }
     }
 
     /**
@@ -366,18 +548,25 @@ class ServerManager {
 
         this.shutdownInProgress = true;
         
-        logger.info(`🛑 Received ${signal}, initiating graceful shutdown...`);
+        logger.info(`Received ${signal}, initiating graceful shutdown...`);
 
         try {
             // Stop monitoring
             this._stopMonitoring();
+            
+            // Shutdown plugins first
+            if (this.pluginManager) {
+                logger.info('Shutting down plugin system...');
+                await this.pluginManager.shutdown();
+                logger.info('Plugin system shutdown completed');
+            }
             
             // Stop server
             if (this.server) {
                 await this.server.stop(this.config.gracefulShutdownTimeout);
             }
             
-            logger.info('✅ Graceful shutdown completed');
+            logger.info('Graceful shutdown completed');
             process.exit(0);
             
         } catch (error) {
@@ -488,8 +677,86 @@ class ServerManager {
         return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
     }
 
+    // Plugin Management API
+
     /**
-     * Get server status for external monitoring
+     * Load a plugin at runtime
+     * @param {string} pluginName - Plugin name to load
+     * @returns {Promise<boolean>} Success status
+     */
+    async loadPlugin(pluginName) {
+        if (!this.pluginManager) {
+            logger.warn('Plugin system not initialized');
+            return false;
+        }
+
+        try {
+            await this.pluginManager.loadPlugin(pluginName);
+            logger.info('Plugin loaded successfully', { pluginName });
+            return true;
+        } catch (error) {
+            logger.error('Failed to load plugin', { pluginName, error: error.message });
+            return false;
+        }
+    }
+
+    /**
+     * Unload a plugin at runtime
+     * @param {string} pluginName - Plugin name to unload
+     * @returns {Promise<boolean>} Success status
+     */
+    async unloadPlugin(pluginName) {
+        if (!this.pluginManager) {
+            logger.warn('Plugin system not initialized');
+            return false;
+        }
+
+        try {
+            await this.pluginManager.unloadPlugin(pluginName);
+            logger.info('Plugin unloaded successfully', { pluginName });
+            return true;
+        } catch (error) {
+            logger.error('Failed to unload plugin', { pluginName, error: error.message });
+            return false;
+        }
+    }
+
+    /**
+     * Reload a plugin at runtime
+     * @param {string} pluginName - Plugin name to reload
+     * @returns {Promise<boolean>} Success status
+     */
+    async reloadPlugin(pluginName) {
+        if (!this.pluginManager) {
+            logger.warn('Plugin system not initialized');
+            return false;
+        }
+
+        try {
+            await this.pluginManager.reloadPlugin(pluginName);
+            logger.info('Plugin reloaded successfully', { pluginName });
+            return true;
+        } catch (error) {
+            logger.error('Failed to reload plugin', { pluginName, error: error.message });
+            return false;
+        }
+    }
+
+    /**
+     * Get plugin information
+     * @param {string} [pluginName] - Specific plugin name (optional)
+     * @returns {Object} Plugin information
+     */
+    getPluginInfo(pluginName) {
+        if (!this.pluginManager) {
+            return null;
+        }
+
+        return this.pluginManager.getPluginInfo(pluginName);
+    }
+
+    /**
+     * Get server status including plugin information
      * @returns {Object} Server status
      */
     getStatus() {
@@ -497,20 +764,27 @@ class ServerManager {
             return { status: 'not_started' };
         }
 
-        return {
+        const status = {
             status: this.server.isHealthy() ? 'healthy' : 'unhealthy',
             uptime: Date.now() - this.startTime,
             server: this.server.getServerInfo(),
             stats: this.server.getStats(),
             health: this.server.getHealthStatus()
         };
+
+        // Add plugin information if available
+        if (this.pluginManager) {
+            status.plugins = this.pluginManager.getStats();
+        }
+
+        return status;
     }
 }
 
 // Create and start server manager
 const serverManager = new ServerManager();
 
-// Export for external access (useful for testing)
+// Export for external access (useful for testing and plugin management)
 module.exports = serverManager;
 
 // Start server if this file is run directly

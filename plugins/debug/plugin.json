@@ -1,0 +1,24 @@
+{
+  "name": "debug",
+  "version": "1.0.0",
+  "description": "Debug logging for server events",
+  "author": "Photon Server",
+  "main": "index.js",
+  "photonVersion": "1.0.0",
+  "dependencies": [],
+  "permissions": [
+    "debug:log"
+  ],
+  "hooks": [
+    "room:created",
+    "room:destroyed",
+    "operation:received",
+    "event:raised"
+  ],
+  "config": {
+    "enabled": true,
+    "logAllEvents": false,
+    "logOperations": true,
+    "logRoomEvents": true
+  }
+}
