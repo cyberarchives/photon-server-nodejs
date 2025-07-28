@@ -2,6 +2,8 @@
 
 A GPBinaryV16 Photon Server implementation in Node.js for real-time multiplayer games.
 
+<img width="1414" height="684" alt="image" src="https://github.com/user-attachments/assets/2f756d23-3846-4027-adda-79a209935836" />
+
 ## What is this?
 
 This is a custom implementation of a Photon server that lets you host your own multiplayer game servers instead of relying on Photon Cloud. It handles the networking protocol that Unity's Photon PUN uses, so your games can connect to your own servers.
