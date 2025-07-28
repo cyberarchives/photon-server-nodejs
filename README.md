@@ -17,7 +17,7 @@ This is a custom implementation of a Photon server that lets you host your own m
 ## Getting it running
 
 ```bash
-git clone https://github.com/cyberarchives/photon-server-nodejs
+git clone https://github.com/cyberarchives/photon-server-nodejs.git
 cd photon-server-nodejs
 npm install
 node examples/basic-server.js
