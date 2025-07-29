@@ -1,4 +1,5 @@
 # Photon Server Node.js
+### This is a project I used for an old build of a game called VRChat
 
 A professional GPBinaryV16 Photon Server implementation in Node.js with enterprise-grade plugin system, monitoring, and real-time multiplayer capabilities.
 
